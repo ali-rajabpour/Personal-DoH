@@ -1,0 +1,17 @@
+#---------------------------
+# DNS over HTTPS environment
+#---------------------------
+
+# Your apex/root domain (example: example.com)
+DOMAIN=example.com
+
+# The sub-domain that will host DoH (example: doh -> doh.example.com)
+SUBDOMAIN=doh
+
+# HTTP path prefix that the DoH server listens on.
+# Leave as "/dns-query" unless you have a reason to change it.
+DOH_HTTP_PREFIX=/dns-query
+
+# Port the DoH container listens on *inside* its network namespace.
+# 8053 is the conventional choice (53 + 8000 offset).
+DOH_SERVER_LISTEN=8053
