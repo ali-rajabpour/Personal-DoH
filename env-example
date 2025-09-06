@@ -5,9 +5,6 @@
 # Your apex/root domain (example: example.com)
 DOMAIN=example.com
 
-# The sub-domain that will host DoH (example: doh -> doh.example.com)
-SUBDOMAIN=doh
-
 # HTTP path prefix that the DoH server listens on.
 # Leave as "/dns-query" unless you have a reason to change it.
 DOH_HTTP_PREFIX=/dns-query
