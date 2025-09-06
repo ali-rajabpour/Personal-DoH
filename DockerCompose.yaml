@@ -15,7 +15,7 @@ services:
       DOH_SERVER_TRIES: "3"
       DOH_SERVER_VERBOSE: "false"
     expose:
-      - "${DOH_SERVER_LISTEN}"
+      - ${DOH_SERVER_LISTEN}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.doh-server.rule=Host(`${SUBDOMAIN}.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)"
