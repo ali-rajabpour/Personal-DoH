@@ -24,8 +24,7 @@ services:
       - traefik.http.services.doh-server.loadbalancer.server.port=${DOH_SERVER_LISTEN}
       - traefik.http.routers.doh-server.tls=true
       - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
-      - traefik.http.routers.doh-server.tls.domains[0].main=${DOMAIN}
-      - traefik.http.routers.doh-server.tls.domains[0].sans=resolver.${DOMAIN}
+      - traefik.http.routers.doh-server.tls.domains[0].main=resolver.${DOMAIN}
       # Define middlewares
       - traefik.http.middlewares.doh-compression.compress=true
       - traefik.http.middlewares.doh-tls.headers.sslredirect=true
