@@ -1,7 +1,7 @@
 services:
   doh-server:
     image: satishweb/doh-server:latest
-    container-name: doh-server
+    container_name: doh-server
     hostname: doh-server
     networks:
       - dokploy-network
