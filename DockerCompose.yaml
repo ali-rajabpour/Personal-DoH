@@ -6,8 +6,7 @@ services:
     networks:
       - dokploy-network
     environment:
-      # Enable below line to see more logs
-      DEBUG: "1"
+      # DEBUG: "1"
       UPSTREAM_DNS_SERVER: "udp:1.1.1.1:53"
       DOH_HTTP_PREFIX: "${DOH_HTTP_PREFIX}"
       DOH_SERVER_LISTEN: ":${DOH_SERVER_LISTEN}"
