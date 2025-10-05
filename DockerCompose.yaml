@@ -7,7 +7,7 @@ services:
       - dokploy-network
     environment:
       # DEBUG: "1"
-      UPSTREAM_DNS_SERVER: "udp:1.1.1.1:53"
+      UPSTREAM_DNS_SERVER: "udp:94.140.14.14:53"
       DOH_HTTP_PREFIX: "${DOH_HTTP_PREFIX}"
       DOH_SERVER_LISTEN: ":${DOH_SERVER_LISTEN}"
       DOH_SERVER_TIMEOUT: "10"
