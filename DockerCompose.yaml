@@ -1,7 +1,6 @@
 services:
   doh-server:
     image: satishweb/doh-server:latest
-    container_name: doh-server
     hostname: doh-server
     networks:
       - dokploy-network
@@ -15,25 +14,26 @@ services:
       DOH_SERVER_VERBOSE: "false"
     expose:
       - ${DOH_SERVER_LISTEN}
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.doh-server.rule=Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)
-      - traefik.http.routers.doh-server.entrypoints=websecure
-      - traefik.http.routers.doh-server.service=doh-server
-      - traefik.http.services.doh-server.loadbalancer.server.port=${DOH_SERVER_LISTEN}
-      - traefik.http.routers.doh-server.tls=true
-      - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
-      - traefik.http.routers.doh-server.tls.domains[0].main=resolver.${DOMAIN}
-      # Define middlewares
-      - traefik.http.middlewares.doh-compression.compress=true
-      - traefik.http.middlewares.doh-tls.headers.sslredirect=true
-      - traefik.http.middlewares.doh-tls.headers.sslforcehost=true
-      # Apply middlewares
-      - traefik.http.routers.doh-server.middlewares=doh-compression,doh-tls,doh-ratelimit
-      # Protection from requests flood
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.average=100
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.burst=50
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.period=10s
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.doh-server.rule=Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)
+        - traefik.http.routers.doh-server.entrypoints=websecure
+        - traefik.http.routers.doh-server.service=doh-server
+        - traefik.http.services.doh-server.loadbalancer.server.port=${DOH_SERVER_LISTEN}
+        - traefik.http.routers.doh-server.tls=true
+        - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
+        - traefik.http.routers.doh-server.tls.domains[0].main=resolver.${DOMAIN}
+        # Define middlewares
+        - traefik.http.middlewares.doh-compression.compress=true
+        - traefik.http.middlewares.doh-tls.headers.sslredirect=true
+        - traefik.http.middlewares.doh-tls.headers.sslforcehost=true
+        # Apply middlewares
+        - traefik.http.routers.doh-server.middlewares=doh-compression,doh-tls,doh-ratelimit
+        # Protection from requests flood
+        - traefik.http.middlewares.doh-ratelimit.ratelimit.average=100
+        - traefik.http.middlewares.doh-ratelimit.ratelimit.burst=50
+        - traefik.http.middlewares.doh-ratelimit.ratelimit.period=10s
 
 networks:
   dokploy-network:
