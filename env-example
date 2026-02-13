@@ -21,4 +21,4 @@ DOH_SERVER_LISTEN=8053
 # a Traefik dynamic config — NO escaping of $ signs needed.
 # Just paste the raw output of: htpasswd -Bbn myuser mypassword
 DOH_USER=myusername
-DOH_HASHED_PASS=$2y$05$PASTE_YOUR_RAW_HASH_HERE
+DOH_HASHED_PASS=PASTE_YOUR_RAW_HASH_HERE

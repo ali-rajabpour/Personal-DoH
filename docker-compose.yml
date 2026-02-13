@@ -6,6 +6,9 @@ services:
     networks:
       - dokploy-network
     user: "0"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     env_file:
       - .env
     volumes:
