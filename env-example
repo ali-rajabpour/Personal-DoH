@@ -5,7 +5,7 @@
 # Your apex/root domain — NOT the full subdomain.
 # The compose file builds the FQDN as: resolver.<DOMAIN>
 # Example: DOMAIN=example.com  →  resolver.example.com
-# You must use resolver.DOMAIN/DH_HTTP_PREFIX in your app
+# You must use resolver.DOMAIN/DOH_HTTP_PREFIX in your app
 DOMAIN=example.com
 
 # HTTP path prefix that the DoH server listens on.
