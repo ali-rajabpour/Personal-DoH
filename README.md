@@ -99,9 +99,18 @@ https://resolver.<DOMAIN>/dns-query
 | `DOH_HTTP_PREFIX` | `/dns-query` | URL path the DoH server listens on. |
 | `DOH_SERVER_LISTEN` | `8053` | Internal container port. |
 | `DOH_USER` | `myusername` | Username for HTTP Basic Auth. |
-| `DOH_HASHED_PASS` | `$2y$05$vI8...` | Raw bcrypt hash from `htpasswd -Bbn`. No `$` escaping needed. |
+| `DOH_HASHED_PASS` | `$2y$05$vI8...` | **Bcrypt hash** from `htpasswd -Bbn`. No `$` escaping needed. |
 
 Credentials are read directly from the mounted `.env` file at container startup (not via Docker Compose environment variable substitution), so `$` signs in the bcrypt hash are never mangled.
+
+> **Important — plain text vs hash:**
+>
+> | Where | What to use |
+> | ----- | ----------- |
+> | `.env` file (`DOH_HASHED_PASS`) | The **bcrypt hash** (starts with `$2y$`) |
+> | Little Snitch / curl / any client | The **plain text password** you chose when running `htpasswd` |
+>
+> The server stores only the hash. Clients send the plain password; Traefik hashes it on the fly and compares. **Never put the hash into a client** — it will always return 401.
 
 ## Server Configuration
 
@@ -156,17 +165,20 @@ Requires **Little Snitch 6.1.3** or later (added DoH password authentication sup
    | Field | Value |
    | ----- | ----- |
    | Server URL | `https://resolver.example.com/dns-query` |
-   | Username | your DoH username |
-   | Password | your DoH password (plain text, not the hash) |
+   | Username | your `DOH_USER` value (e.g. `myusername`) |
+   | Password | your **plain text** password — the one you typed into `htpasswd`, **not** the `$2y$` hash |
    | Server SPKI | *(leave empty)* |
 
 6. Click **OK**, then click **Test** to verify.
 
-> **Troubleshooting:** If Little Snitch reports "wrong URL", try the URL without the path (`https://resolver.example.com`) — some versions auto-append `/dns-query`. Also ensure your Mac can resolve the hostname via its current DNS settings before switching.
+> **Troubleshooting:**
+>
+> - **401 Unauthorized** — you are most likely entering the bcrypt hash instead of the plain text password. The Password field must contain the original password, not the `$2y$05$...` string from your `.env` file.
+> - **"Wrong URL"** — try the URL without the path (`https://resolver.example.com`) — some versions auto-append `/dns-query`. Also ensure your Mac can resolve the hostname via its current DNS settings before switching.
 
 ### macOS / iOS (DNS profile)
 
-Create an Apple configuration profile (`.mobileconfig`) with the DoH payload. Tools like [dns-profile-creator](https://github.com/niclas-edn/dns-profile-creator) can generate one. Use the server URL with embedded credentials:
+Create an Apple configuration profile (`.mobileconfig`) with the DoH payload. Tools like [dns-profile-creator](https://github.com/niclas-edn/dns-profile-creator) can generate one. Use the server URL with embedded credentials (plain text password, **not** the hash):
 
 ```text
 https://myuser:mypassword@resolver.example.com/dns-query
@@ -183,6 +195,8 @@ https://myuser:mypassword@resolver.example.com/dns-query
 > **Note:** Firefox supports custom DoH URLs in `about:config` → `network.trr.uri`, but does not reliably pass embedded credentials. Browser DoH with basic auth may require a local proxy such as `dnscrypt-proxy`.
 
 ### curl
+
+Use `-u 'user:plainpassword'` — the **plain text** password, not the hash:
 
 ```bash
 curl -s -H 'accept: application/dns-message' \
