@@ -5,9 +5,17 @@ services:
     restart: unless-stopped
     networks:
       - dokploy-network
+    env_file:
+      - .env
     volumes:
       - ./doh-server.conf:/doh-server.conf
-    command: ["/server/doh-server", "-conf", "/doh-server.conf"]
+      - /etc/dokploy/traefik/dynamic:/traefik-dynamic
+    command:
+      - /bin/sh
+      - -c
+      - |
+        printf 'http:\n  middlewares:\n    doh-auth:\n      basicAuth:\n        users:\n          - "%s:%s"\n' "$$DOH_USER" "$$DOH_HASHED_PASS" > /traefik-dynamic/doh-auth.yml
+        exec /server/doh-server -conf /doh-server.conf
     expose:
       - "8053"
     labels:
@@ -24,10 +32,9 @@ services:
       - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
       
       # -- AUTHENTICATION --
-      # Combines username + bcrypt hash from .env
-      # The hash is injected via ${} substitution — no $$ escaping needed here.
+      # Auth middleware is written at container startup from DOH_USER + DOH_HASHED_PASS
+      # env vars into Traefik's dynamic config dir. No $ escaping needed in .env.
       # Generate hash: htpasswd -Bbn myuser mypassword
-      - traefik.http.middlewares.doh-auth.basicauth.users=${DOH_USER}:${DOH_HASHED_PASS}
       
       # -- MIDDLEWARES --
       - traefik.http.middlewares.doh-compression.compress=true
@@ -40,7 +47,7 @@ services:
       - traefik.http.middlewares.doh-ratelimit.ratelimit.period=10s
 
       # Apply all middlewares
-      - traefik.http.routers.doh-server.middlewares=doh-compression,doh-tls,doh-ratelimit,doh-auth
+      - traefik.http.routers.doh-server.middlewares=doh-compression,doh-tls,doh-ratelimit,doh-auth@file
 
 networks:
   dokploy-network:

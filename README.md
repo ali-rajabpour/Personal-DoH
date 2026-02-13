@@ -95,7 +95,7 @@ The project consists of three key files:
 | `DOH_HTTP_PREFIX` | `/dns-query` | URL path the DoH server listens on. |
 | `DOH_SERVER_LISTEN` | `8053` | Internal container port (conventional choice). |
 | `DOH_USER` | `myusername` | Username for HTTP Basic Auth. |
-| `DOH_HASHED_PASS` | `$$2y$$05$$vI8...` | Hashed password from `htpasswd -Bbn`. **Double every `$` to `$$`** — Compose re-interprets `$` in substituted values. |
+| `DOH_HASHED_PASS` | `$2y$05$vI8...` | Raw bcrypt hash from `htpasswd -Bbn`. No escaping needed — the container reads it directly from the environment. |
 
 All variables are loaded by Docker Compose from the `.env` file at runtime.
 
@@ -130,12 +130,12 @@ The compose file configures the following Traefik labels:
 - **Routing:** `Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)`
 - **Entrypoint:** `websecure`
 - **TLS:** automatic Let's Encrypt cert via the `letsencrypt` resolver
-- **Basic Auth:** credentials from `DOH_USER` and `DOH_HASHED_PASS` env vars (injected via `${}` substitution — no `$$` escaping needed when using env vars)
+- **Basic Auth:** at startup the container reads `DOH_USER` and `DOH_HASHED_PASS` from the environment and writes a Traefik dynamic config to `/etc/dokploy/traefik/dynamic/doh-auth.yml`. Referenced as `doh-auth@file` in the middleware chain. No `$` escaping needed in `.env`.
 - **Compression:** gzip enabled
 - **SSL Headers:** force SSL redirect and host
 - **Rate Limiting:** 200 req average / 100 burst / 10s period
 
-Middlewares are chained as: `doh-compression,doh-tls,doh-ratelimit,doh-auth`
+Middlewares are chained as: `doh-compression,doh-tls,doh-ratelimit,doh-auth@file`
 
 ## Verifying the Endpoint
 

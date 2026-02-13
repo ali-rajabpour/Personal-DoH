@@ -16,10 +16,9 @@ DOH_HTTP_PREFIX=/dns-query
 # 8053 is the conventional choice (53 + 8000 offset).
 DOH_SERVER_LISTEN=8053
 
-# Credentials
-# 1. Generate hash:  htpasswd -Bbn myuser mypassword
-# 2. IMPORTANT: Double every $ sign in the hash before pasting here.
-#    Docker Compose re-interprets $ in substituted values.
-#    Example: $2y$05$abc  →  $$2y$$05$$abc
+# Authentication credentials (read by the container at startup).
+# The container writes a Traefik dynamic config from these values —
+# no escaping needed here, just paste the raw htpasswd output.
+# Generate hash: htpasswd -Bbn myuser mypassword
 DOH_USER=myusername
-DOH_HASHED_PASS=HASHED-PASSWORD-WITH-DOUBLE-DOLLARS
+DOH_HASHED_PASS=$2y$05$PASTE_YOUR_RAW_HASH_HERE
