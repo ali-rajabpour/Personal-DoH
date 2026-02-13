@@ -6,7 +6,6 @@ services:
     networks:
       - dokploy-network
     volumes:
-      # Mount the custom config for triple upstream failover & DoT
       - ./doh-server.conf:/doh-server.conf
     command: ["/server/doh-server", "-conf", "/doh-server.conf"]
     expose:
@@ -23,11 +22,10 @@ services:
       # -- TLS --
       - traefik.http.routers.doh-server.tls=true
       - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
-      - traefik.http.routers.doh-server.tls.domains[0].main=resolver.${DOMAIN}
       
-      # -- 2. AUTHENTICATION --
-      # The syntax below joins the user and hash with a colon.
-      # We use $${VAR} for the hash to escape the $ symbols inside the string.
+      # -- 2. AUTHENTICATION (Separated .env fields) --
+      # We combine the username and the hashed password here.
+      # Note: Use $$ to escape the $ signs in your hash.
       # use the following command in terminal to generate the hash: htpasswd -Bbn myuser mypassword
       - traefik.http.middlewares.doh-auth.basicauth.users=${DOH_USER}:$${DOH_HASHED_PASS}
       
@@ -36,7 +34,7 @@ services:
       - traefik.http.middlewares.doh-tls.headers.sslredirect=true
       - traefik.http.middlewares.doh-tls.headers.sslforcehost=true
       
-      # Ratelimit (Optimized for personal use)
+      # Ratelimit
       - traefik.http.middlewares.doh-ratelimit.ratelimit.average=200
       - traefik.http.middlewares.doh-ratelimit.ratelimit.burst=100
       - traefik.http.middlewares.doh-ratelimit.ratelimit.period=10s
