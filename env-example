@@ -17,6 +17,9 @@ DOH_HTTP_PREFIX=/dns-query
 DOH_SERVER_LISTEN=8053
 
 # Credentials
-# use the following command in terminal to generate the hash: htpasswd -Bbn myuser mypassword
+# 1. Generate hash:  htpasswd -Bbn myuser mypassword
+# 2. IMPORTANT: Double every $ sign in the hash before pasting here.
+#    Docker Compose re-interprets $ in substituted values.
+#    Example: $2y$05$abc  →  $$2y$$05$$abc
 DOH_USER=myusername
-DOH_HASHED_PASS=HASHED-PASSWORD
+DOH_HASHED_PASS=$$2y$$05$$REPLACE_THIS_WITH_YOUR_ESCAPED_HASH

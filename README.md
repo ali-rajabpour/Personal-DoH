@@ -95,7 +95,7 @@ The project consists of three key files:
 | `DOH_HTTP_PREFIX` | `/dns-query` | URL path the DoH server listens on. |
 | `DOH_SERVER_LISTEN` | `8053` | Internal container port (conventional choice). |
 | `DOH_USER` | `myusername` | Username for HTTP Basic Auth. |
-| `DOH_HASHED_PASS` | `$2y$05$vI8...` | Hashed password from `htpasswd -Bbn`. Use single `$` in the `.env` file. |
+| `DOH_HASHED_PASS` | `$$2y$$05$$vI8...` | Hashed password from `htpasswd -Bbn`. **Double every `$` to `$$`** — Compose re-interprets `$` in substituted values. |
 
 All variables are loaded by Docker Compose from the `.env` file at runtime.
 
