@@ -1,97 +1,191 @@
 # Self-Hosted DNS-over-HTTPS (DoH)
 
-Run your own DNS-over-HTTPS endpoint behind Traefik using Docker Compose. The container forwards DNS queries to an upstream resolver such as Cloudflare (1.1.1.1), while Traefik handles TLS termination, automatic certificates, rate-limiting and optional compression.
+Run your own **private DNS-over-HTTPS** endpoint behind Traefik using Docker Compose. The server forwards DNS queries over **DNS-over-TLS (DoT)** to multiple upstream resolvers (NextDNS, AdGuard, Cloudflare) with automatic failover, while Traefik handles TLS termination, automatic certificates, basic authentication, rate-limiting and compression.
 
 ---
 
 ## Contents
-1. [Features](#features)  
-2. [Requirements](#requirements)  
-3. [Quick Start](#quick-start)  
-4. [Environment Variables](#environment-variables)  
-5. [Traefik Notes](#traefik-notes)  
-6. [Verifying the Endpoint](#verifying-the-endpoint)  
-7. [FAQ](#faq)
+
+1. [Features](#features)
+2. [Architecture](#architecture)
+3. [Requirements](#requirements)
+4. [Quick Start](#quick-start)
+5. [Configuration](#configuration)
+6. [Environment Variables](#environment-variables)
+7. [Server Configuration (`doh-server.conf`)](#server-configuration)
+8. [Traefik Middleware](#traefik-middleware)
+9. [Verifying the Endpoint](#verifying-the-endpoint)
+10. [FAQ](#faq)
 
 ---
 
 ## Features
-• 🛡 **Private** – keep your DNS queries on your own infrastructure.  
-• 🔒 **Automatic TLS** via Traefik and Let’s Encrypt.  
-• ⚡️ **Fast** DoH server image (`satishweb/doh-server`).  
-• 🚦 **Rate-limiting** & **compression** middleware pre-configured.  
-• 🏷 **Single file** deployment with `.env` for easy overrides.
+
+- **Private** – keep your DNS queries on your own infrastructure.
+- **End-to-end encryption** – TLS from client to server (HTTPS) and from server to upstreams (DoT on port 853).
+- **Triple upstream failover** – NextDNS (primary), AdGuard, and Cloudflare. If one upstream is slow or down, the server retries another automatically.
+- **Basic authentication** – Traefik middleware protects the endpoint with HTTP Basic Auth so only you can use it.
+- **Automatic TLS** via Traefik and Let's Encrypt.
+- **Rate-limiting** & **compression** middleware pre-configured.
+- **Custom config file** (`doh-server.conf`) mounted into the container for full control over upstream and performance settings.
+
+## Architecture
+
+```text
+┌──────────┐  HTTPS   ┌─────────┐  DoT (853)  ┌───────────┐
+│  Client   │ ──────▶ │ Traefik │ ──────────▶ │ doh-server │
+│(Browser/  │         │  (TLS   │              │ (forwards  │──▶ NextDNS / AdGuard / Cloudflare
+│ App/      │         │  Auth   │              │  via DoT)  │
+│ Little    │         │  Rate   │              └───────────┘
+│ Snitch)   │         │  Limit) │
+└──────────┘         └─────────┘
+```
 
 ## Requirements
-* A server with Docker & Docker Compose
-* Traefik (v2) already running and listening on ports 80/443
-* A public hostname (`doh.example.com`) pointing to the server’s IP
 
-> **Note** Traefik must share a user-defined Docker network with this stack (default: `dokploy-network`). Adjust in `docker-compose.yaml` if you use a different network.
+- A server with **Docker** & **Docker Compose**
+- **Traefik v2+** already running and listening on ports 80/443
+- A public hostname (e.g. `resolver.example.com`) with a DNS A record pointing to the server's IP
+- `htpasswd` (from `apache2-utils`) to generate a password hash for basic auth
+
+> **Note:** Traefik must share a user-defined Docker network with this stack (default: `dokploy-network`). Adjust in `DockerCompose.yaml` if you use a different network.
 
 ## Quick Start
+
 ```bash
 # 1. Clone repo & enter directory
-$ git clone <repo-url> && cd Personal-DoH
+git clone <repo-url> && cd Personal-DoH
 
 # 2. Copy environment template and edit values
-$ cp env-example .env
-$ vim .env  # or nano, code, etc.
+cp env-example .env
 
-# 3. Launch the stack
-$ docker compose up -d  # or docker-compose up -d
-```
-After the containers start you should have a working DoH endpoint at
+# 3. Generate a password hash for basic auth
+#    (requires apache2-utils or similar)
+htpasswd -Bbn myuser mypassword
+#    Copy the output hash into DOH_HASHED_PASS in .env
 
+# 4. Edit .env with your domain and credentials
+vim .env
+
+# 5. Launch the stack
+docker compose up -d
 ```
-https://<SUBDOMAIN>.<DOMAIN><DOH_HTTP_PREFIX>
-# Example: https://doh.example.com/dns-query
+
+After the containers start you should have a working DoH endpoint at:
+
+```text
+https://resolver.<DOMAIN>/dns-query
 ```
+
+## Configuration
+
+The project consists of three key files:
+
+| File | Purpose |
+|------|---------|
+| `DockerCompose.yaml` | Service definition, Traefik labels, networking |
+| `doh-server.conf` | Server config: upstreams (DoT), timeouts, retries |
+| `.env` (from `env-example`) | Domain, path prefix, auth credentials |
 
 ## Environment Variables
+
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `DOMAIN` | `example.com` | Apex (root) domain managed in DNS. |
-| `SUBDOMAIN` | `doh` | Subdomain that points to this server. Final FQDN will be `${SUBDOMAIN}.${DOMAIN}`. |
-| `DOH_HTTP_PREFIX` | `/dns-query` | URL path Traefik will route to the DoH container. |
-| `DOH_SERVER_LISTEN` | `8053` | Internal container port for the DoH service. |
-| `UPSTREAM_DNS_SERVER` | `udp:1.1.1.1:53` | (In compose) Upstream DNS resolver in `<proto>:<ip>:<port>` format. Change if desired. |
+| `DOMAIN` | `example.com` | Your apex/root domain. The DoH endpoint will be at `resolver.<DOMAIN>`. |
+| `DOH_HTTP_PREFIX` | `/dns-query` | URL path the DoH server listens on. |
+| `DOH_SERVER_LISTEN` | `8053` | Internal container port (conventional choice). |
+| `DOH_USER` | `myusername` | Username for HTTP Basic Auth. |
+| `DOH_HASHED_PASS` | `$2y$05$vI8...` | Hashed password from `htpasswd -Bbn`. Use single `$` in the `.env` file. |
 
 All variables are loaded by Docker Compose from the `.env` file at runtime.
 
-## Traefik Notes
-The compose file sets the following Traefik labels:
-* Router rule: `Host(`${SUBDOMAIN}.${DOMAIN}`) && Path(`${DOH_HTTP_PREFIX}`)`
-* Service port: `${DOH_SERVER_LISTEN}`
-* TLS enabled + automatic Let’s Encrypt cert resolver (`letsencrypt`)
-* Security middleware: rate limiting (100 req/10s, burst 50) & HSTS redirect
+## Server Configuration
 
-If you use a different cert resolver name or want to tweak limits, edit the labels accordingly.
+The `doh-server.conf` file is a TOML config mounted into the container. It controls:
+
+- **`listen`** – address and port the server binds to (default `":8053"`)
+- **`path`** – HTTP path for DNS queries (must match `DOH_HTTP_PREFIX`)
+- **`upstream`** – list of upstream DNS resolvers in `<proto>:<ip>:<port>` format
+- **`timeout`** – seconds before an upstream query times out (default `5`)
+- **`tries`** – number of retry attempts across upstreams on failure (default `3`)
+- **`verbose`** – enable detailed logging (`true`/`false`)
+- **`cert`** / **`key`** – TLS cert/key paths (left empty since Traefik handles TLS)
+
+### Upstream format examples
+
+| Format | Protocol |
+|--------|----------|
+| `udp:1.1.1.1:53` | Plain DNS over UDP |
+| `tcp:1.1.1.1:53` | Plain DNS over TCP |
+| `tcp-tls:1.1.1.1:853` | DNS-over-TLS (recommended) |
+
+The current configuration uses **DNS-over-TLS** (`tcp-tls`) for all three upstreams so the entire chain is encrypted end-to-end. The server picks one upstream per request and uses the `tries` setting to fail over to another if one is unresponsive.
+
+> **Note:** Options like `upstream_selector`, `weight`, and `[cache]` are **not** supported by the `doh-server` binary (they belong to the `doh-client` component). Do not add them to `doh-server.conf`.
+
+## Traefik Middleware
+
+The compose file configures the following Traefik labels:
+
+- **Routing:** `Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)`
+- **Entrypoint:** `websecure`
+- **TLS:** automatic Let's Encrypt cert via the `letsencrypt` resolver
+- **Basic Auth:** credentials from `DOH_USER` and `DOH_HASHED_PASS` env vars (use `$$` in compose to escape `$` in hashes)
+- **Compression:** gzip enabled
+- **SSL Headers:** force SSL redirect and host
+- **Rate Limiting:** 200 req average / 100 burst / 10s period
+
+Middlewares are chained as: `doh-compression,doh-tls,doh-ratelimit,doh-auth`
 
 ## Verifying the Endpoint
-```bash
-# JSON format (RFC 8484)
-curl -H 'accept: application/dns-json' \
-  "https://${SUBDOMAIN}.${DOMAIN}${DOH_HTTP_PREFIX}?name=cloudflare.com&type=A"
 
-# Wire-format (binary) query using doh-cli (optional)
-doh-cli query cloudflare.com A -u "https://${SUBDOMAIN}.${DOMAIN}${DOH_HTTP_PREFIX}"
+```bash
+# Test WITHOUT credentials (should return 401 Unauthorized)
+curl -I "https://resolver.example.com/dns-query?name=example.com&type=A"
+
+# Test WITH credentials (should return 200 OK with DNS response)
+curl -u "myuser:mypassword" -H 'accept: application/dns-json' \
+  "https://resolver.example.com/dns-query?name=cloudflare.com&type=A"
 ```
-A successful response confirms your DoH service is working.
+
+### Client configuration (Little Snitch, browsers, etc.)
+
+Use the URL format with embedded credentials:
+
+```text
+https://myuser:mypassword@resolver.example.com/dns-query
+```
 
 ## FAQ
-### Can I use a different upstream DNS resolver?
-Yes. Override `UPSTREAM_DNS_SERVER` in `docker-compose.yaml` or via an additional environment variable stanza.
+
+### Can I change the upstream DNS resolvers?
+
+Edit the `upstream` array in `doh-server.conf`. You can use any combination of UDP, TCP, or DoT upstreams.
 
 ### Where are logs?
-Docker logs for the DoH container: `docker compose logs -f doh-server`.
 
-### How do I update?
-Pull the latest image and re-deploy:
 ```bash
-$ docker compose pull && docker compose up -d
+docker compose logs -f doh-server
 ```
 
----
+### How do I update?
 
-Licensed under the MIT License.
+```bash
+docker compose pull && docker compose up -d
+```
+
+### How do I regenerate the password hash?
+
+```bash
+htpasswd -Bbn myuser mynewpassword
+```
+
+Copy the hash portion into `DOH_HASHED_PASS` in your `.env` file, then restart:
+
+```bash
+docker compose up -d
+```
+
+### Why not use `[cache]` or `upstream_selector` in the config?
+
+These options belong to the `doh-client` component of `m13253/dns-over-https`, not the server. The server binary will reject them with `unknown option` errors.
