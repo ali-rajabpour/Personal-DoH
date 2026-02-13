@@ -16,9 +16,9 @@ DOH_HTTP_PREFIX=/dns-query
 # 8053 is the conventional choice (53 + 8000 offset).
 DOH_SERVER_LISTEN=8053
 
-# Authentication credentials (read by the container at startup).
-# The container writes a Traefik dynamic config from these values —
-# no escaping needed here, just paste the raw htpasswd output.
-# Generate hash: htpasswd -Bbn myuser mypassword
+# Authentication credentials for HTTP Basic Auth.
+# The container reads this file directly at startup and writes
+# a Traefik dynamic config — NO escaping of $ signs needed.
+# Just paste the raw output of: htpasswd -Bbn myuser mypassword
 DOH_USER=myusername
 DOH_HASHED_PASS=$2y$05$PASTE_YOUR_RAW_HASH_HERE

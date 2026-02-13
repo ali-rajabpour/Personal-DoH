@@ -12,38 +12,10 @@ services:
       - ./doh-server.conf:/doh-server.conf
       - ./app-config:/app-config
       - /etc/dokploy/traefik/dynamic:/traefik-dynamic
+      - ./.env:/env-file:ro
     command: ["/server/doh-server", "-conf", "/doh-server.conf"]
     expose:
       - "8053"
-    labels:
-      - traefik.enable=true
-      
-      # -- ROUTING (HTTPS) --
-      - traefik.http.routers.doh-server.rule=Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)
-      - traefik.http.routers.doh-server.entrypoints=websecure
-      - traefik.http.routers.doh-server.service=doh-server
-      - traefik.http.routers.doh-server.priority=200
-      - traefik.http.services.doh-server.loadbalancer.server.port=8053
-
-      # -- TLS --
-      - traefik.http.routers.doh-server.tls=true
-      - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
-
-      # -- HTTP → HTTPS REDIRECT --
-      - traefik.http.routers.doh-server-http.rule=Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)
-      - traefik.http.routers.doh-server-http.entrypoints=web
-      - traefik.http.routers.doh-server-http.priority=200
-      - traefik.http.routers.doh-server-http.middlewares=redirect-to-https@file
-
-      # -- MIDDLEWARES --
-      # Auth is loaded from Traefik file provider (written by app-config at startup)
-      - traefik.http.middlewares.doh-compression.compress=true
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.average=200
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.burst=100
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.period=10s
-
-      # Apply all middlewares (doh-auth@file from Traefik file provider)
-      - traefik.http.routers.doh-server.middlewares=doh-compression,doh-ratelimit,doh-auth@file
 
 networks:
   dokploy-network:
