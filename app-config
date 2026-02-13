@@ -1,0 +1,26 @@
+#!/bin/bash
+# app-config — sourced by the satishweb/doh-server entrypoint before starting the server.
+# Writes a Traefik basicAuth middleware config from DOH_USER and DOH_HASHED_PASS env vars
+# into the Traefik dynamic config directory. Traefik watches this directory and auto-reloads.
+#
+# Because this script is a standalone file (not part of the compose YAML), Docker Compose
+# never interprets the $ signs in the hash — solving the escaping problem entirely.
+
+if [ -d /traefik-dynamic ] && [ -n "$DOH_USER" ] && [ -n "$DOH_HASHED_PASS" ]; then
+  # Static YAML structure (single-quoted heredoc = no shell expansion)
+  cat > /traefik-dynamic/doh-auth.yml << 'YAML_STATIC'
+http:
+  middlewares:
+    doh-auth:
+      basicAuth:
+        users:
+YAML_STATIC
+  # Dynamic user:hash line — printf %s is safe for $ in the hash value
+  printf '          - "%s:%s"\n' "$DOH_USER" "$DOH_HASHED_PASS" >> /traefik-dynamic/doh-auth.yml
+  echo "| APP-CONFIG: Wrote Traefik auth config for user: $DOH_USER"
+else
+  echo "| APP-CONFIG: WARNING — DOH_USER or DOH_HASHED_PASS not set, or /traefik-dynamic not mounted. Skipping auth."
+fi
+
+# Hand off to the server command (passed via $@ from the entrypoint)
+exec "$@"
