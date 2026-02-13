@@ -23,11 +23,11 @@ services:
       - traefik.http.routers.doh-server.tls=true
       - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
       
-      # -- 2. AUTHENTICATION (Separated .env fields) --
-      # We combine the username and the hashed password here.
-      # Note: Use $$ to escape the $ signs in your hash.
-      # use the following command in terminal to generate the hash: htpasswd -Bbn myuser mypassword
-      - traefik.http.middlewares.doh-auth.basicauth.users=${DOH_USER}:$${DOH_HASHED_PASS}
+      # -- AUTHENTICATION --
+      # Combines username + bcrypt hash from .env
+      # The hash is injected via ${} substitution — no $$ escaping needed here.
+      # Generate hash: htpasswd -Bbn myuser mypassword
+      - traefik.http.middlewares.doh-auth.basicauth.users=${DOH_USER}:${DOH_HASHED_PASS}
       
       # -- MIDDLEWARES --
       - traefik.http.middlewares.doh-compression.compress=true

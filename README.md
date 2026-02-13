@@ -130,7 +130,7 @@ The compose file configures the following Traefik labels:
 - **Routing:** `Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)`
 - **Entrypoint:** `websecure`
 - **TLS:** automatic Let's Encrypt cert via the `letsencrypt` resolver
-- **Basic Auth:** credentials from `DOH_USER` and `DOH_HASHED_PASS` env vars (use `$$` in compose to escape `$` in hashes)
+- **Basic Auth:** credentials from `DOH_USER` and `DOH_HASHED_PASS` env vars (injected via `${}` substitution — no `$$` escaping needed when using env vars)
 - **Compression:** gzip enabled
 - **SSL Headers:** force SSL redirect and host
 - **Rate Limiting:** 200 req average / 100 burst / 10s period
