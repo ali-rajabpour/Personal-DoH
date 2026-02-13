@@ -91,7 +91,7 @@ The project consists of three key files:
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `DOMAIN` | `example.com` | Your apex/root domain. The DoH endpoint will be at `resolver.<DOMAIN>`. |
+| `DOMAIN` | `example.com` | Apex domain only (NOT the full subdomain). The compose file builds the FQDN as `resolver.<DOMAIN>`. |
 | `DOH_HTTP_PREFIX` | `/dns-query` | URL path the DoH server listens on. |
 | `DOH_SERVER_LISTEN` | `8053` | Internal container port (conventional choice). |
 | `DOH_USER` | `myusername` | Username for HTTP Basic Auth. |

@@ -2,7 +2,9 @@
 # DNS over HTTPS environment
 #---------------------------
 
-# Your apex/root domain (example: example.com)
+# Your apex/root domain — NOT the full subdomain.
+# The compose file builds the FQDN as: resolver.<DOMAIN>
+# Example: DOMAIN=example.com  →  resolver.example.com
 DOMAIN=example.com
 
 # HTTP path prefix that the DoH server listens on.
