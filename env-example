@@ -22,4 +22,4 @@ DOH_SERVER_LISTEN=8053
 #    Docker Compose re-interprets $ in substituted values.
 #    Example: $2y$05$abc  →  $$2y$$05$$abc
 DOH_USER=myusername
-DOH_HASHED_PASS=$$2y$$05$$REPLACE_THIS_WITH_YOUR_ESCAPED_HASH
+DOH_HASHED_PASS=HASHED-PASSWORD-WITH-DOUBLE-DOLLARS
