@@ -83,7 +83,7 @@ The project consists of three key files:
 
 | File | Purpose |
 |------|---------|
-| `DockerCompose.yaml` | Service definition, Traefik labels, networking |
+| `docker-compose.yml` | Service definition, volumes, networking |
 | `doh-server.conf` | Server config: upstreams (DoT), timeouts, retries |
 | `.env` (from `env-example`) | Domain, path prefix, auth credentials |
 
@@ -95,9 +95,9 @@ The project consists of three key files:
 | `DOH_HTTP_PREFIX` | `/dns-query` | URL path the DoH server listens on. |
 | `DOH_SERVER_LISTEN` | `8053` | Internal container port (conventional choice). |
 | `DOH_USER` | `myusername` | Username for HTTP Basic Auth. |
-| `DOH_HASHED_PASS` | `$2y$05$vI8...` | Raw bcrypt hash from `htpasswd -Bbn`. No escaping needed — the container reads it directly from the environment. |
+| `DOH_HASHED_PASS` | `$2y$05$vI8...` | Raw bcrypt hash from `htpasswd -Bbn`. No escaping needed — the container reads the `.env` file directly, bypassing Compose interpolation. |
 
-All variables are loaded by Docker Compose from the `.env` file at runtime.
+All variables are loaded from the `.env` file. Credentials (`DOH_USER`, `DOH_HASHED_PASS`) are read directly from the mounted file at container startup, so `$` signs in the bcrypt hash are never mangled.
 
 ## Server Configuration
 
@@ -123,29 +123,32 @@ The current configuration uses **DNS-over-TLS** (`tcp-tls`) for all three upstre
 
 > **Note:** Options like `upstream_selector`, `weight`, and `[cache]` are **not** supported by the `doh-server` binary (they belong to the `doh-client` component). Do not add them to `doh-server.conf`.
 
-## Traefik Middleware
+## Traefik Integration
 
-The compose file configures the following Traefik labels:
+This project uses the **Traefik file provider** — not Docker labels — for routing. At container startup the `app-config` script:
 
-- **Routing:** `Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)`
-- **Entrypoint:** `websecure`
-- **TLS:** automatic Let's Encrypt cert via the `letsencrypt` resolver
-- **Basic Auth:** at startup the container reads `DOH_USER` and `DOH_HASHED_PASS` from the environment and writes a Traefik dynamic config to `/etc/dokploy/traefik/dynamic/doh-auth.yml`. Referenced as `doh-auth@file` in the middleware chain. No `$` escaping needed in `.env`.
-- **Compression:** gzip enabled
-- **SSL Headers:** force SSL redirect and host
-- **Rate Limiting:** 200 req average / 100 burst / 10s period
+1. Reads `DOH_USER` and `DOH_HASHED_PASS` directly from the mounted `.env` file (immune to Compose `$` interpolation).
+2. Reads `DOMAIN` and `DOH_HTTP_PREFIX` from the container environment.
+3. Writes a complete Traefik dynamic config to `/etc/dokploy/traefik/dynamic/doh-auth.yml` containing:
+   - **HTTPS router** — `Host(`resolver.<DOMAIN>`) && PathPrefix(`<PREFIX>`)`, TLS via Let's Encrypt, `doh-auth` basicAuth middleware.
+   - **HTTP → HTTPS redirect router** — same rule, `redirect-to-https` middleware.
+   - **Service** — load-balances to `http://doh-server:8053`.
+   - **basicAuth middleware** — `user:bcrypt_hash` from the env vars.
 
-Middlewares are chained as: `doh-compression,doh-tls,doh-ratelimit,doh-auth@file`
+Traefik watches the dynamic config directory and picks up changes automatically.
 
 ## Verifying the Endpoint
 
 ```bash
 # Test WITHOUT credentials (should return 401 Unauthorized)
-curl -I "https://resolver.example.com/dns-query?name=example.com&type=A"
+curl -s -o /dev/null -w '%{http_code}' \
+  'https://resolver.example.com/dns-query?dns=AAEBAAABAAAAAAAABmdvb2dsZQNjb20AAAEAAQ'
 
 # Test WITH credentials (should return 200 OK with DNS response)
-curl -u "myuser:mypassword" -H 'accept: application/dns-json' \
-  "https://resolver.example.com/dns-query?name=cloudflare.com&type=A"
+curl -s -o /dev/null -w '%{http_code}' \
+  -H 'accept: application/dns-message' \
+  -u 'myuser:mypassword' \
+  'https://resolver.example.com/dns-query?dns=AAEBAAABAAAAAAAABmdvb2dsZQNjb20AAAEAAQ'
 ```
 
 ### Client configuration (Little Snitch, browsers, etc.)
