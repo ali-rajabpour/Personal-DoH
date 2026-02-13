@@ -2,37 +2,47 @@ services:
   doh-server:
     image: satishweb/doh-server:latest
     hostname: doh-server
+    restart: unless-stopped
     networks:
       - dokploy-network
-    environment:
-      # DEBUG: "1"
-      UPSTREAM_DNS_SERVER: "udp:45.90.28.47:53"
-      DOH_HTTP_PREFIX: "${DOH_HTTP_PREFIX}"
-      DOH_SERVER_LISTEN: ":${DOH_SERVER_LISTEN}"
-      DOH_SERVER_TIMEOUT: "10"
-      DOH_SERVER_TRIES: "3"
-      DOH_SERVER_VERBOSE: "false"
+    volumes:
+      # Mount the custom config for triple upstream failover & DoT
+      - ./doh-server.conf:/doh-server.conf
+    command: ["/server/doh-server", "-conf", "/doh-server.conf"]
     expose:
-      - ${DOH_SERVER_LISTEN}
+      - "8053"
     labels:
       - traefik.enable=true
+      
+      # -- ROUTING --
       - traefik.http.routers.doh-server.rule=Host(`resolver.${DOMAIN}`) && PathPrefix(`${DOH_HTTP_PREFIX}`)
       - traefik.http.routers.doh-server.entrypoints=websecure
       - traefik.http.routers.doh-server.service=doh-server
-      - traefik.http.services.doh-server.loadbalancer.server.port=${DOH_SERVER_LISTEN}
+      - traefik.http.services.doh-server.loadbalancer.server.port=8053
+      
+      # -- TLS --
       - traefik.http.routers.doh-server.tls=true
       - traefik.http.routers.doh-server.tls.certresolver=letsencrypt
       - traefik.http.routers.doh-server.tls.domains[0].main=resolver.${DOMAIN}
-      # Define middlewares
+      
+      # -- 2. AUTHENTICATION --
+      # The syntax below joins the user and hash with a colon.
+      # We use $${VAR} for the hash to escape the $ symbols inside the string.
+      # use the following command in terminal to generate the hash: htpasswd -Bbn myuser mypassword
+      - traefik.http.middlewares.doh-auth.basicauth.users=${DOH_USER}:$${DOH_HASHED_PASS}
+      
+      # -- MIDDLEWARES --
       - traefik.http.middlewares.doh-compression.compress=true
       - traefik.http.middlewares.doh-tls.headers.sslredirect=true
       - traefik.http.middlewares.doh-tls.headers.sslforcehost=true
-      # Apply middlewares
-      - traefik.http.routers.doh-server.middlewares=doh-compression,doh-tls,doh-ratelimit
-      # Protection from requests flood
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.average=100
-      - traefik.http.middlewares.doh-ratelimit.ratelimit.burst=50
+      
+      # Ratelimit (Optimized for personal use)
+      - traefik.http.middlewares.doh-ratelimit.ratelimit.average=200
+      - traefik.http.middlewares.doh-ratelimit.ratelimit.burst=100
       - traefik.http.middlewares.doh-ratelimit.ratelimit.period=10s
+
+      # Apply all middlewares
+      - traefik.http.routers.doh-server.middlewares=doh-compression,doh-tls,doh-ratelimit,doh-auth
 
 networks:
   dokploy-network:
