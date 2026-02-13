@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     networks:
       - dokploy-network
+    user: "0"
     env_file:
       - .env
     volumes:
