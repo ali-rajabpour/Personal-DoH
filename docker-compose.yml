@@ -4,9 +4,25 @@ services:
     hostname: dnscrypt-proxy
     restart: unless-stopped
     networks:
-      - dokploy-network
+      dns-internal:
+        ipv4_address: 10.53.0.10
     volumes:
       - ./dnscrypt-proxy.toml:/config/dnscrypt-proxy.toml:ro
+    expose:
+      - "5353"
+
+  unbound:
+    image: mvance/unbound:latest
+    hostname: unbound
+    restart: unless-stopped
+    depends_on:
+      - dnscrypt-proxy
+    networks:
+      dns-internal:
+        ipv4_address: 10.53.0.20
+      dokploy-network:
+    volumes:
+      - ./unbound.conf:/opt/unbound/etc/unbound/unbound.conf:ro
     expose:
       - "53"
 
@@ -15,7 +31,7 @@ services:
     hostname: doh-server
     restart: unless-stopped
     depends_on:
-      - dnscrypt-proxy
+      - unbound
     networks:
       - dokploy-network
     user: "0"
@@ -31,5 +47,10 @@ services:
       - "8053"
 
 networks:
+  dns-internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.53.0.0/24
   dokploy-network:
     external: true

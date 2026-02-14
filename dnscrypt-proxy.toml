@@ -1,16 +1,16 @@
 # dnscrypt-proxy configuration — DoH-only upstream resolver
 #
-# This service acts as a local DNS resolver inside the Docker network.
-# It forwards all queries to upstream DoH servers (port 443) and exposes
-# plain DNS (port 53) to the doh-server container.
-#
+# Forwards queries to upstream DoH servers (port 443) and exposes
+# plain DNS (port 5353) to the Unbound caching layer.
 # All external traffic is encrypted (DoH over HTTPS/443).
 
-listen_addresses = ['0.0.0.0:53']
+listen_addresses = ['0.0.0.0:5353']
 
 # --- Server selection ---
-# Only use these specific DoH servers from the public resolver list.
-server_names = ['cloudflare', 'cloudflare-ipv6', 'adguard-dns-doh', 'nextdns']
+# NextDNS is the primary resolver. Cloudflare and AdGuard are fallbacks.
+# With lb_strategy = 'first', queries always go to the first working
+# server in this list. Others are used only if NextDNS is unavailable.
+server_names = ['nextdns', 'cloudflare', 'adguard-dns-doh']
 
 # --- Protocol filters ---
 # Only allow DoH servers (port 443) — DoT (port 853) is blocked by some hosts.
@@ -24,26 +24,35 @@ require_dnssec = false
 require_nolog = true
 require_nofilter = false
 
-# --- Performance ---
-# Load-balance across all available servers
-lb_strategy = 'p2'
+# --- Load balancing ---
+# 'first' = always use the first available server (NextDNS).
+# Falls back to the next server only if the primary is down.
+lb_strategy = 'first'
 lb_estimator = true
 
 # --- Bootstrap ---
-# Plain DNS resolvers used ONLY to resolve the DoH server hostnames
-# (e.g. cloudflare-dns.com). Once resolved, all queries go over DoH.
+# Plain DNS used ONLY to resolve DoH server hostnames on first start
+# (e.g. dns.nextdns.io). All actual queries go over encrypted DoH.
 bootstrap_resolvers = ['1.1.1.1:53', '8.8.8.8:53']
 ignore_system_dns = true
 
-# --- Cache ---
+# --- Cache (lightweight — Unbound is the main cache layer) ---
 cache = true
-cache_size = 4096
-cache_min_ttl = 2400
+cache_size = 512
+cache_min_ttl = 600
 cache_max_ttl = 86400
+cache_neg_min_ttl = 60
+cache_neg_max_ttl = 600
 
 # --- Timeouts ---
 timeout = 5000
 keepalive = 30
+
+# --- Connection ---
+# Keep connections alive to reduce TLS handshake overhead
+http3 = false
+blocked_query_response = 'refused'
+max_clients = 250
 
 # --- Resolver list source ---
 [sources]

@@ -27,7 +27,8 @@ Run your own **private DNS-over-HTTPS** endpoint behind Traefik using Docker Com
 
 - **Private** — keep your DNS queries on your own infrastructure.
 - **End-to-end encryption** — HTTPS from client to server, DoH (HTTPS/443) from server to upstreams. All external traffic is encrypted.
-- **Triple upstream failover** — Cloudflare, AdGuard, and NextDNS via `dnscrypt-proxy`. If one upstream is slow or down, queries are routed to another automatically.
+- **Aggressive caching** — Unbound with `prefetch` (refreshes entries *before* TTL expires) and `serve-expired` (returns stale data instantly, refreshes in background). Repeat queries are near-instant.
+- **NextDNS primary, failover to Cloudflare / AdGuard** — `dnscrypt-proxy` with `lb_strategy = 'first'` always uses NextDNS, falling back only if it's down.
 - **Basic authentication** — Traefik basicAuth middleware protects the endpoint so only you can use it.
 - **Automatic TLS** — Let's Encrypt certificates managed by Traefik.
 - **No credential escaping** — the `app-config` script reads the `.env` file directly at startup, so `$` signs in bcrypt hashes are never mangled by Docker Compose.
@@ -36,14 +37,14 @@ Run your own **private DNS-over-HTTPS** endpoint behind Traefik using Docker Com
 ## Architecture
 
 ```text
-┌───────────┐  HTTPS  ┌─────────┐          ┌────────────┐  Docker   ┌─────────────────┐  DoH(443)
-│  Client    │───────▶│ Traefik │─────────▶│ doh-server  │─────────▶│ dnscrypt-proxy   │──────────▶ Cloudflare
-│            │        │         │          │             │ internal │                  │──────────▶ AdGuard
-│ Little     │        │ • TLS   │          │             │  network │ • DoH upstreams  │──────────▶ NextDNS
-│ Snitch /   │        │ • Auth  │          └────────────┘          │ • caching        │
-│ Browser /  │        │         │                                   │ • load balancing  │
-│ curl       │        └─────────┘                                   └─────────────────┘
-└───────────┘
+                         Docker internal network
+┌──────────┐ HTTPS ┌─────────┐       ┌────────────┐       ┌─────────┐       ┌────────────────┐ DoH(443)
+│  Client   │─────▶│ Traefik │──────▶│ doh-server  │──────▶│ Unbound │──────▶│ dnscrypt-proxy │────────▶ NextDNS
+│           │      │ • TLS   │       │             │       │ • cache │       │ • DoH upstream │────────▶ Cloudflare
+│ Little    │      │ • Auth  │       │             │       │ • pre-  │       │ • NextDNS 1st  │────────▶ AdGuard
+│ Snitch /  │      │         │       └────────────┘       │   fetch │       │ • failover     │
+│ curl      │      └─────────┘                             └─────────┘       └────────────────┘
+└──────────┘
 ```
 
 > **Why not DoT (port 853)?** Many VPS providers block outbound port 853. DoH uses port 443 (standard HTTPS), which is virtually never blocked. Security is equivalent — both encrypt DNS queries with TLS.
@@ -88,9 +89,10 @@ https://resolver.<DOMAIN>/dns-query
 
 | File | Purpose |
 | ---- | ------- |
-| `docker-compose.yml` | Service definitions (doh-server + dnscrypt-proxy), volumes, networking |
+| `docker-compose.yml` | Service definitions (doh-server + Unbound + dnscrypt-proxy), volumes, networking |
 | `doh-server.conf` | DoH server config: upstream, timeouts, retries |
-| `dnscrypt-proxy.toml` | Upstream resolver config: DoH servers, caching, load balancing |
+| `unbound.conf` | Caching resolver: prefetch, serve-expired, forwarding |
+| `dnscrypt-proxy.toml` | Upstream DoH config: server priority, failover, bootstrap |
 | `app-config` | Startup script that writes Traefik routing + auth config |
 | `.env` (from `env-example`) | Domain, path prefix, auth credentials |
 
@@ -127,17 +129,26 @@ Credentials are read directly from the mounted `.env` file at container startup 
 - **`verbose`** — enable detailed logging (`true` / `false`)
 - **`cert`** / **`key`** — TLS cert/key paths (left empty — Traefik handles TLS)
 
-The default configuration forwards queries to the `dnscrypt-proxy` sidecar (`tcp:dnscrypt-proxy:53`), which handles encrypted upstream resolution via DoH. You generally do not need to change the upstream in `doh-server.conf` — configure upstream DoH servers in `dnscrypt-proxy.toml` instead.
+The default configuration forwards queries to Unbound (`tcp:unbound:53`), which caches responses and forwards cache misses to `dnscrypt-proxy` for encrypted upstream resolution via DoH. You generally do not need to change `doh-server.conf`.
 
-### dnscrypt-proxy configuration
+### Unbound (caching layer)
 
-The `dnscrypt-proxy.toml` file controls which upstream DoH servers are used. Key settings:
+`unbound.conf` provides the aggressive caching that makes repeat queries near-instant:
 
-- **`server_names`** — list of resolvers from the public resolver list (e.g. `cloudflare`, `adguard-dns-doh`, `nextdns`)
+- **`prefetch: yes`** — when a cached entry reaches 10% remaining TTL, Unbound proactively refreshes it in the background. Popular domains never expire from cache.
+- **`serve-expired: yes`** — if a cached entry has expired, Unbound returns the stale data *immediately* (TTL=30) and refreshes in the background. Zero perceived latency on expiry.
+- **`cache-min-ttl: 300`** — entries stay cached for at least 5 minutes even if the upstream TTL is shorter.
+- **`msg-cache-size: 64m`** / **`rrset-cache-size: 128m`** — generous cache sizes.
+- **`qname-minimisation: yes`** — privacy: only sends the minimum necessary query to each upstream hop.
+
+### dnscrypt-proxy (encrypted upstream)
+
+`dnscrypt-proxy.toml` handles the encrypted connection to upstream DoH servers:
+
+- **`server_names`** — `['nextdns', 'cloudflare', 'adguard-dns-doh']` — ordered by priority
+- **`lb_strategy = 'first'`** — always use NextDNS; Cloudflare and AdGuard are fallbacks only
 - **`doh_servers = true`** — only use DoH (port 443) servers
-- **`bootstrap_resolvers`** — plain DNS resolvers used *only* to resolve DoH server hostnames on first start
-- **`cache`** — built-in response cache (4096 entries by default)
-- **`lb_strategy`** — load balancing across servers (`p2` = pick the fastest two, then choose randomly)
+- **`bootstrap_resolvers`** — plain DNS used *only* to resolve DoH server hostnames on first start
 
 > **Note:** Options like `upstream_selector`, `weight`, and `[cache]` are **not** supported by the `doh-server` binary (they belong to the `doh-client` component). Do not add them to `doh-server.conf`.
 
@@ -242,7 +253,10 @@ Edit `server_names` in `dnscrypt-proxy.toml`. The available server names come fr
 # DoH server logs
 docker compose logs -f doh-server
 
-# Upstream resolver logs
+# Caching resolver logs
+docker compose logs -f unbound
+
+# Upstream DoH resolver logs
 docker compose logs -f dnscrypt-proxy
 ```
 
@@ -266,7 +280,7 @@ docker compose up -d
 
 ### Why not use `[cache]` or `upstream_selector` in `doh-server.conf`?
 
-These options belong to the `doh-client` component of [m13253/dns-over-https](https://github.com/m13253/dns-over-https), not the server. The server binary rejects them with `unknown option` errors. Caching is handled by `dnscrypt-proxy` instead.
+These options belong to the `doh-client` component of [m13253/dns-over-https](https://github.com/m13253/dns-over-https), not the server. The server binary rejects them with `unknown option` errors. Caching is handled by Unbound instead.
 
 ### Why does the container run as root?
 
