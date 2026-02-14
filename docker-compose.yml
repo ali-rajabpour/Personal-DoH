@@ -1,14 +1,24 @@
 services:
+  dnscrypt-proxy:
+    image: klutchell/dnscrypt-proxy:latest
+    hostname: dnscrypt-proxy
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+    volumes:
+      - ./dnscrypt-proxy.toml:/config/dnscrypt-proxy.toml:ro
+    expose:
+      - "53"
+
   doh-server:
     image: satishweb/doh-server:latest
     hostname: doh-server
     restart: unless-stopped
+    depends_on:
+      - dnscrypt-proxy
     networks:
       - dokploy-network
     user: "0"
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
     env_file:
       - .env
     volumes:

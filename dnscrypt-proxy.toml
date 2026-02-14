@@ -1,0 +1,54 @@
+# dnscrypt-proxy configuration — DoH-only upstream resolver
+#
+# This service acts as a local DNS resolver inside the Docker network.
+# It forwards all queries to upstream DoH servers (port 443) and exposes
+# plain DNS (port 53) to the doh-server container.
+#
+# All external traffic is encrypted (DoH over HTTPS/443).
+
+listen_addresses = ['0.0.0.0:53']
+
+# --- Server selection ---
+# Only use these specific DoH servers from the public resolver list.
+server_names = ['cloudflare', 'cloudflare-ipv6', 'adguard-dns-doh', 'nextdns']
+
+# --- Protocol filters ---
+# Only allow DoH servers (port 443) — DoT (port 853) is blocked by some hosts.
+doh_servers = true
+dnscrypt_servers = false
+odoh_servers = false
+
+ipv4_servers = true
+ipv6_servers = false
+require_dnssec = false
+require_nolog = true
+require_nofilter = false
+
+# --- Performance ---
+# Load-balance across all available servers
+lb_strategy = 'p2'
+lb_estimator = true
+
+# --- Bootstrap ---
+# Plain DNS resolvers used ONLY to resolve the DoH server hostnames
+# (e.g. cloudflare-dns.com). Once resolved, all queries go over DoH.
+bootstrap_resolvers = ['1.1.1.1:53', '8.8.8.8:53']
+ignore_system_dns = true
+
+# --- Cache ---
+cache = true
+cache_size = 4096
+cache_min_ttl = 2400
+cache_max_ttl = 86400
+
+# --- Timeouts ---
+timeout = 5000
+keepalive = 30
+
+# --- Resolver list source ---
+[sources]
+  [sources.'public-resolvers']
+    urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
+    cache_file = '/tmp/public-resolvers.md'
+    minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+    refresh_delay = 72
