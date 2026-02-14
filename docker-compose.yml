@@ -8,6 +8,7 @@ services:
         ipv4_address: 10.53.0.10
     volumes:
       - ./dnscrypt-proxy.toml:/config/dnscrypt-proxy.toml:ro
+      - dnscrypt-cache:/cache
     expose:
       - "5353"
 
@@ -33,7 +34,8 @@ services:
     depends_on:
       - unbound
     networks:
-      - dokploy-network
+      dns-internal:
+      dokploy-network:
     user: "0"
     env_file:
       - .env
@@ -45,6 +47,9 @@ services:
     command: ["/server/doh-server", "-conf", "/doh-server.conf"]
     expose:
       - "8053"
+
+volumes:
+  dnscrypt-cache:
 
 networks:
   dns-internal:
